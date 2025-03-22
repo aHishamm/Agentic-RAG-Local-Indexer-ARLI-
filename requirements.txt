@@ -1,0 +1,11 @@
+# requirements.txt
+
+Django>=3.2,<4.0
+psycopg2-binary>=2.9
+djangorestframework>=3.12
+smolagents
+transformers
+torch
+numpy
+pandas
+gradio
