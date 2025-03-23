@@ -1,12 +1,14 @@
+from django.db import models
+
 class Indexer(models.Model):
-    id = models.AutoField(primary_key=True)
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    file_name = models.CharField(max_length=255)
+    file_path = models.CharField(max_length=500)
+    file_type = models.CharField(max_length=50)
+    creation_date = models.DateTimeField()
+    size = models.BigIntegerField()
 
     def __str__(self):
-        return self.title
+        return self.file_name
 
     class Meta:
         verbose_name = 'Indexer'

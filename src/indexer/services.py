@@ -1,46 +1,56 @@
-from .models import IndexedFile
+from .models import Indexer
 
-def create_indexed_file(file_path, metadata):
+def create_indexed_file(file_name, file_path, file_type, creation_date, size):
     """
     Create a new indexed file entry in the database.
     
-    :param file_path: Path to the file being indexed.
-    :param metadata: Dictionary containing metadata for the file.
-    :return: IndexedFile instance.
+    :param file_name: Name of the file
+    :param file_path: Path to the file
+    :param file_type: Type of the file
+    :param creation_date: Creation date of the file
+    :param size: Size of the file in bytes
+    :return: Indexer instance
     """
-    indexed_file = IndexedFile.objects.create(file_path=file_path, **metadata)
+    indexed_file = Indexer.objects.create(
+        file_name=file_name,
+        file_path=file_path,
+        file_type=file_type,
+        creation_date=creation_date,
+        size=size
+    )
     return indexed_file
 
-def update_indexed_file(indexed_file_id, metadata):
+def update_indexed_file(file_id, **metadata):
     """
     Update an existing indexed file entry in the database.
     
-    :param indexed_file_id: ID of the indexed file to update.
-    :param metadata: Dictionary containing updated metadata for the file.
-    :return: Updated IndexedFile instance.
+    :param file_id: ID of the indexed file to update
+    :param metadata: Dictionary containing updated metadata for the file
+    :return: Updated Indexer instance
     """
-    indexed_file = IndexedFile.objects.get(id=indexed_file_id)
+    indexed_file = Indexer.objects.get(id=file_id)
     for key, value in metadata.items():
-        setattr(indexed_file, key, value)
+        if hasattr(indexed_file, key):
+            setattr(indexed_file, key, value)
     indexed_file.save()
     return indexed_file
 
-def delete_indexed_file(indexed_file_id):
+def delete_indexed_file(file_id):
     """
     Delete an indexed file entry from the database.
     
-    :param indexed_file_id: ID of the indexed file to delete.
+    :param file_id: ID of the indexed file to delete
     """
-    IndexedFile.objects.filter(id=indexed_file_id).delete()
+    Indexer.objects.filter(id=file_id).delete()
 
-def get_indexed_file(indexed_file_id):
+def get_indexed_file(file_id):
     """
     Retrieve an indexed file entry from the database.
     
-    :param indexed_file_id: ID of the indexed file to retrieve.
-    :return: IndexedFile instance or None if not found.
+    :param file_id: ID of the indexed file to retrieve
+    :return: Indexer instance or None if not found
     """
     try:
-        return IndexedFile.objects.get(id=indexed_file_id)
-    except IndexedFile.DoesNotExist:
+        return Indexer.objects.get(id=file_id)
+    except Indexer.DoesNotExist:
         return None
