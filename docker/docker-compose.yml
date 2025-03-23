@@ -3,14 +3,24 @@ version: '3.8'
 services:
   web:
     build:
-      context: ./docker
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     volumes:
-      - ./src:/app/src
+      - ../src:/app/src
     ports:
       - "8000:8000"
-    env_file:
-      - .env.example
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=your_secret_key
+      - ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
+      - DB_NAME=agentic_rag
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DJANGO_SETTINGS_MODULE=core.settings
+      - USE_TZ=True
+      - TIME_ZONE=UTC
     depends_on:
       - db
 
@@ -19,9 +29,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      POSTGRES_DB: agentic_rag
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      - POSTGRES_DB=agentic_rag
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d agentic_rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
