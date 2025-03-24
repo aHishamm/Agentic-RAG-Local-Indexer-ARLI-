@@ -4,9 +4,9 @@ psycopg2-binary>=2.9
 djangorestframework>=3.12
 smolagents
 transformers
+sentence-transformers
 torch
 numpy
 pandas
 gradio
-langchain
-llama_index
+python-dotenv
