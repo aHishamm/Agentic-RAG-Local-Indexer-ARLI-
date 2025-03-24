@@ -43,7 +43,7 @@ To get started with the project, follow these steps:
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/aHishamm/Agentic-RAG-Local-Indexer-ARLI-.git
    cd agentic-rag-indexer
    ```
 
