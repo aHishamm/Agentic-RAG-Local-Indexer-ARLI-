@@ -13,20 +13,15 @@ agentic-rag-indexer
 │   │   ├── urls.py
 │   │   ├── asgi.py
 │   │   └── wsgi.py
-│   ├── indexer
-│   │   ├── __init__.py
-│   │   ├── admin.py
-│   │   ├── apps.py
-│   │   ├── models.py
-│   │   ├── services.py
-│   │   ├── urls.py
-│   │   ├── utils.py
-│   │   └── views.py
-│   └── utils
+│   └── indexer
 │       ├── __init__.py
-│       ├── file_handlers.py
-│       ├── indexing.py
-│       └── database.py
+│       ├── admin.py
+│       ├── apps.py
+│       ├── models.py
+│       ├── services.py
+│       ├── urls.py
+│       ├── utils.py
+│       └── views.py
 ├── docker
 │   ├── Dockerfile
 │   ├── docker-compose.yml
