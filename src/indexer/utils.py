@@ -10,6 +10,13 @@ from django.conf import settings
 if TYPE_CHECKING:
     from .models import Indexer
 
+# Import the SearchAgentService
+from .search_agent import SearchAgentService
+
+# Singleton instance of the SearchAgentService for reuse
+_search_agent_instance = None
+_search_agent_initialized = False
+
 def setup_model_directory() -> str:
     """
     Create and return the path to the HF_Models directory for storing downloaded models.
@@ -180,3 +187,68 @@ def update_indexed_files():
         except Exception as e:
             print(f"Error updating database for {file_data['file_path']}: {e}")
             continue
+
+def get_search_agent() -> Optional[SearchAgentService]:
+    """
+    Get or create a singleton instance of the SearchAgentService.
+    This avoids loading the RAG model multiple times.
+    
+    Returns:
+        Initialized SearchAgentService instance or None if initialization failed
+    """
+    global _search_agent_instance
+    global _search_agent_initialized
+    
+    if not _search_agent_initialized:
+        try:
+            _search_agent_instance = SearchAgentService()
+            _search_agent_initialized = True
+        except Exception as e:
+            print(f"Error initializing SearchAgentService: {e}")
+            _search_agent_initialized = True  # Mark as initialized even if it failed
+            _search_agent_instance = None     # But set instance to None to indicate failure
+    
+    return _search_agent_instance
+
+def search_files_with_rag(query: str, top_n: int = 5) -> List[Dict[str, Any]]:
+    """
+    Search for files using the RAG model and natural language query.
+    This is a convenience wrapper around the SearchAgentService.
+    
+    Args:
+        query: Natural language query string
+        top_n: Number of results to return
+        
+    Returns:
+        List of file data dictionaries with match information
+    """
+    search_agent = get_search_agent()
+    
+    if search_agent is None:
+        print("SearchAgentService not available. Falling back to basic search.")
+        from .models import Indexer
+        # Use a simple search as fallback
+        results = Indexer.objects.filter(file_name__icontains=query).order_by('-creation_date')[:top_n]
+        return [{
+            'id': item.id,
+            'file_name': item.file_name,
+            'file_path': item.file_path,
+            'file_type': item.file_type,
+            'creation_date': item.creation_date,
+            'size': _format_size(item.size),
+            'note': 'Basic search only (RAG model unavailable)'
+        } for item in results]
+    
+    results = search_agent.search_files(query, top_n)
+    
+    if not results:
+        print(f"No results found for query: '{query}'")
+    
+    return results
+
+def _format_size(size_bytes: int) -> str:
+    """Format file size from bytes to human-readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024.0 or unit == 'TB':
+            return f"{size_bytes:.2f} {unit}"
+        size_bytes /= 1024.0

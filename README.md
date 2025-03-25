@@ -1,116 +1,131 @@
-# Agentic RAG Local Indexer
-This is an agentic RAG pipeline that runs locally, allowing access to external APIs and tools for performing tasks, as well as indexing local files for faster search. 
+# Agentic RAG Local Indexer (ARLI)
 
-## Project Structure
-
-```
-agentic-rag-indexer
-├── src
-│   ├── manage.py
-│   ├── core
-│   │   ├── __init__.py
-│   │   ├── settings.py
-│   │   ├── urls.py
-│   │   ├── asgi.py
-│   │   └── wsgi.py
-│   └── indexer
-│       ├── __init__.py
-│       ├── admin.py
-│       ├── apps.py
-│       ├── models.py
-│       ├── services.py
-│       ├── urls.py
-│       ├── utils.py
-│       ├── unit_test.py
-│       └── views.py
-├── docker
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── init-db
-├── HF_Models            # Directory for storing HuggingFace models
-│   ├── datasets
-│   ├── hub
-│   ├── metrics
-│   └── models
-├── requirements.txt
-├── .env
-├── .gitignore
-└── README.md
-```
-
-## Getting Started
-
-To get started with the project, follow these steps:
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/aHishamm/Agentic-RAG-Local-Indexer-ARLI-.git
-   cd agentic-rag-indexer
-   ```
-
-2. **Set up environment variables:**
-   - Copy the .env.example to .env (if not already done)
-   - Update the environment variables as needed
-
-3. **Start the Docker containers in detached mode:**
-   ```bash
-   cd docker && docker compose up -d
-   ```
-   This will start both the web (arli-web) and database (arli-db) containers in the background.
-
-4. **Access the Python container:**
-   ```bash
-   docker exec -it arli-web bash
-   ```
-   This command gives you an interactive shell inside the Python container.
-
-5. **Run database migrations:**
-   Once inside the container, run:
-   ```bash
-   python src/manage.py makemigrations
-   python src/manage.py migrate
-   ```
-
-6. **Create a superuser (optional):**
-   ```bash
-   python src/manage.py createsuperuser
-   ```
-
-7. **Access the application:**
-   - Main application: http://localhost:8000
-   - Admin interface: http://localhost:8000/admin
-
-## Development Commands
-
-Here are some useful commands for development:
-
-- **View container logs:**
-  ```bash
-  docker compose logs -f
-  ```
-
-- **Stop the containers:**
-  ```bash
-  docker compose down
-  ```
-
-- **Rebuild and start containers:**
-  ```bash
-  docker compose up -d --build
-  ```
+A Django-based application for intelligent file indexing and searching using RAG (Retrieval Augmented Generation) and embedding models.
 
 ## Features
 
-- Local file system indexing
-- Filename embedding generation using HuggingFace models
-- Similar file search functionality
-- PostgreSQL database for storing file metadata
-- Docker containerization for easy deployment
+- **Intelligent File Search**: Natural language search powered by RAG models
+  - Use natural language to describe the files you're looking for
+  - Smart file matching using both embeddings and content analysis
+  - Fallback to basic search when RAG model is unavailable
+  
+- **File Indexing**:
+  - Automatic indexing of common user directories
+  - File metadata extraction and storage
+  - Embedding generation for improved similarity search
+  - Support for multiple languages including Arabic
+  
+- **Search Capabilities**:
+  - Natural language queries using smolagents and LLMs
+  - Similarity-based search using embeddings
+  - Basic keyword search as fallback
+  - File type filtering and path-based search
+
+## Getting Started
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd Agentic-RAG-Local-Indexer-ARLI-
+   ```
+
+2. **Set up environment:**
+   ```bash
+   # Create and activate virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment variables:**
+   Create a `.env` file based on `.env.example` with your settings:
+   ```env
+   SECRET_KEY=your_secret_key
+   DEBUG=True
+   ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
+   
+   # Database settings
+   DB_NAME=agentic_rag
+   DB_USER=postgres
+   DB_PASSWORD=your_password
+   DB_HOST=localhost
+   DB_PORT=5432
+   ```
+
+4. **Initialize the database:**
+   ```bash
+   python manage.py migrate
+   ```
+
+5. **Run the development server:**
+   ```bash
+   python manage.py runserver
+   ```
+
+## Usage
+
+### Web Interface
+
+1. Access the web interface at `http://localhost:8000`
+2. Use the search bar to enter natural language queries:
+   - "Find all PDF documents created last week"
+   - "Show me Python files in the src directory"
+   - "Find images larger than 1MB"
+
+### API Endpoints
+
+- `GET /api/files/` - List all indexed files
+- `GET /api/files/<id>/` - Get specific file details
+- `POST /api/search/` - Search files with natural language query
+  ```json
+  {
+    "query": "find python files with database code",
+    "top_n": 5
+  }
+  ```
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+python manage.py test
+
+# Run specific test cases
+python manage.py test indexer.tests.SearchAgentTestCase
+```
+
+### Project Structure
+
+```
+src/
+├── core/            # Django project settings
+├── indexer/         # Main application
+│   ├── models.py    # Database models
+│   ├── views.py     # View controllers
+│   ├── utils.py     # Utility functions
+│   ├── search_agent.py  # RAG search implementation
+│   └── templates/   # HTML templates
+└── manage.py        # Django management script
+```
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the Apache 2.0 License. See the LICENSE file for more details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with [Django](https://www.djangoproject.com/)
+- RAG implementation using [smolagents](https://github.com/huggingface/smolagents)
+- Embeddings by [SentenceTransformers](https://www.sbert.net/)

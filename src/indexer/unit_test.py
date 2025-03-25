@@ -1,6 +1,7 @@
 import unittest
 import os
 import numpy as np
+from unittest.mock import patch, MagicMock
 from pathlib import Path
 from datetime import datetime
 from django.test import TestCase
@@ -13,9 +14,12 @@ from .utils import (
     search_similar_files,
     scan_directory,
     get_common_directories,
-    update_indexed_files
+    update_indexed_files,
+    get_search_agent,
+    search_files_with_rag
 )
 from .models import Indexer
+from .search_agent import SearchAgentService
 
 class UtilsTestCase(TestCase):
     def setUp(self):
@@ -164,6 +168,107 @@ class UtilsTestCase(TestCase):
                 os.rmdir(test_dir)
             except:
                 pass
+
+class SearchAgentTestCase(TestCase):
+    """Test cases for RAG-powered search functionality"""
+    
+    def setUp(self):
+        """Set up test environment"""
+        self.test_files = [
+            Indexer.objects.create(
+                file_name="document.pdf",
+                file_path="/test/path/document.pdf",
+                file_type="pdf",
+                creation_date=datetime.now(),
+                size=1024
+            ),
+            Indexer.objects.create(
+                file_name="image.jpg",
+                file_path="/test/path/image.jpg",
+                file_type="jpg",
+                creation_date=datetime.now(),
+                size=2048
+            )
+        ]
+        
+        # Generate and set embeddings for test files
+        for file in self.test_files:
+            embedding = np.random.rand(1024).astype(np.float32)
+            file.set_embedding(embedding)
+            file.save()
+
+    def tearDown(self):
+        """Clean up after tests"""
+        Indexer.objects.all().delete()
+
+    @patch('indexer.search_agent.CodeAgent')
+    def test_search_agent_initialization(self, mock_code_agent):
+        """Test SearchAgentService initialization"""
+        agent = SearchAgentService()
+        self.assertIsNotNone(agent)
+        mock_code_agent.assert_called_once()
+
+    def test_get_search_agent_singleton(self):
+        """Test search agent singleton pattern"""
+        with patch('indexer.search_agent.SearchAgentService') as mock_service:
+            agent1 = get_search_agent()
+            agent2 = get_search_agent()
+            
+            # Should only be initialized once
+            mock_service.assert_called_once()
+            self.assertEqual(agent1, agent2)
+
+    @patch('indexer.search_agent.SearchAgentService')
+    def test_search_files_with_rag(self, mock_service):
+        """Test RAG-powered file search"""
+        # Mock the search results
+        mock_results = [
+            {
+                'id': 1,
+                'file_name': 'document.pdf',
+                'file_path': '/test/path/document.pdf',
+                'file_type': 'pdf',
+                'creation_date': datetime.now(),
+                'size': '1.00 KB'
+            }
+        ]
+        
+        mock_instance = mock_service.return_value
+        mock_instance.search_files.return_value = mock_results
+        
+        # Test search
+        results = search_files_with_rag("find pdf documents", top_n=1)
+        
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['file_name'], 'document.pdf')
+        mock_instance.search_files.assert_called_once_with("find pdf documents", 1)
+
+    @patch('indexer.search_agent.SearchAgentService')
+    def test_search_files_with_rag_fallback(self, mock_service):
+        """Test fallback search when RAG model is unavailable"""
+        # Mock SearchAgentService to raise an exception
+        mock_service.side_effect = Exception("Model failed to load")
+        
+        # Test search with fallback
+        results = search_files_with_rag("document", top_n=5)
+        
+        # Should still return results using basic search
+        self.assertIsInstance(results, list)
+        for result in results:
+            self.assertIn('note', result)
+            self.assertEqual(result['note'], 'Basic search only (RAG model unavailable)')
+
+    def test_query_database_tool(self):
+        """Test the database query tool used by smolagents"""
+        from indexer.search_agent import query_database
+        
+        # Test valid SQL query
+        result = query_database("SELECT COUNT(*) FROM indexer_indexer")
+        self.assertIsInstance(result, str)
+        
+        # Test invalid SQL query
+        result = query_database("INVALID SQL")
+        self.assertIn("Error executing query", result)
 
 if __name__ == '__main__':
     unittest.main()
