@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
+from django.conf import settings
 
 if TYPE_CHECKING:
     from .models import Indexer
@@ -20,13 +21,14 @@ def setup_model_directory() -> str:
     models_dir.mkdir(exist_ok=True)
     return str(models_dir)
 
-def init_embedding_model(model_name: str = 'all-MiniLM-L6-v2') -> SentenceTransformer:
+def init_embedding_model(model_name: Optional[str] = None) -> SentenceTransformer:
     """
     Initialize the sentence transformer model with the appropriate device.
     Downloads the model to HF_Models directory if not already present and loads it to the most efficient available device.
     
     Args:
-        model_name: Name of the model to load from HuggingFace hub
+        model_name: Optional name of the model to load from HuggingFace hub. 
+                   If None, uses DEFAULT_EMBEDDING from settings
         
     Returns:
         Initialized SentenceTransformer model
@@ -35,6 +37,13 @@ def init_embedding_model(model_name: str = 'all-MiniLM-L6-v2') -> SentenceTransf
     os.environ['TRANSFORMERS_CACHE'] = models_dir
     os.environ['HF_HOME'] = models_dir
     
+    # Use settings-defined model if none specified
+    if model_name is None:
+        model_name = settings.DEFAULT_EMBEDDING
+        model_path = settings.DEFAULT_EMBEDDING_MODEL_PATH
+    else:
+        model_path = os.path.join(models_dir, model_name)
+    
     if torch.cuda.is_available():
         device = 'cuda'
     elif torch.backends.mps.is_available():
@@ -42,14 +51,15 @@ def init_embedding_model(model_name: str = 'all-MiniLM-L6-v2') -> SentenceTransf
     else:
         device = 'cpu'
     
-    print(f"Loading model on {device} device...")
-    print(f"Models will be stored in: {models_dir}")
+    print(f"Loading model {model_name} on {device} device...")
+    print(f"Models will be stored in: {model_path}")
     
-    model = SentenceTransformer(model_name, device=device, cache_folder=models_dir)
+    model = SentenceTransformer(model_name, device=device, cache_folder=model_path)
     return model
 
 # Initialize the model when the module is loaded
 model = init_embedding_model()
+arabic_model = init_embedding_model(settings.DEFAULT_EMBEDDING_ARABIC)
 
 def get_file_metadata(file_path: str) -> Dict[str, Any]:
     """
@@ -75,9 +85,19 @@ def get_file_metadata(file_path: str) -> Dict[str, Any]:
     except OSError as e:
         raise ValueError(f"Error getting file metadata: {e}")
 
-def generate_filename_embedding(filename: str) -> np.ndarray:
-    """Generate embedding for a filename using sentence-transformers."""
-    embedding = model.encode(filename, convert_to_tensor=False)
+def generate_filename_embedding(filename: str, use_arabic_model: bool = False) -> np.ndarray:
+    """
+    Generate embedding for a filename using sentence-transformers.
+    
+    Args:
+        filename: Name of the file to generate embedding for
+        use_arabic_model: Whether to use the Arabic-specific model
+    
+    Returns:
+        numpy array containing the embedding
+    """
+    embedding_model = arabic_model if use_arabic_model else model
+    embedding = embedding_model.encode(filename, convert_to_tensor=False)
     return embedding.astype(np.float32)
 
 def search_similar_files(query: str, indexed_files: List['Indexer'], top_k: int = 5) -> List[Dict[str, Any]]:
