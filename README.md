@@ -21,6 +21,7 @@ agentic-rag-indexer
 │       ├── services.py
 │       ├── urls.py
 │       ├── utils.py
+│       ├── unit_test.py
 │       └── views.py
 ├── docker
 │   ├── Dockerfile
