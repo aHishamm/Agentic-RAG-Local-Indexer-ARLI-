@@ -59,7 +59,7 @@ def init_embedding_model(model_name: Optional[str] = None) -> SentenceTransforme
 
 # Initialize the model when the module is loaded
 model = init_embedding_model()
-arabic_model = init_embedding_model(settings.DEFAULT_EMBEDDING_ARABIC)
+#arabic_model = init_embedding_model(settings.DEFAULT_EMBEDDING_ARABIC)
 
 def get_file_metadata(file_path: str) -> Dict[str, Any]:
     """
