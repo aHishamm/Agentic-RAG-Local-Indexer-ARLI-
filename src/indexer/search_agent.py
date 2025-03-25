@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 import torch
 from django.conf import settings
 from smolagents import CodeAgent, tool
-from smolagents.models import LocalModel
+from smolagents import TransformersModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from .models import Indexer
 
@@ -79,7 +79,7 @@ class SearchAgentService:
     def _initialize_agent(self) -> None:
         """Initialize the CodeAgent for search operations"""
         # Create a smolagents compatible model
-        model = LocalModel(
+        model = TransformersModel(
             pipeline=self.pipe,
             temperature=0.1,
             max_tokens=512
