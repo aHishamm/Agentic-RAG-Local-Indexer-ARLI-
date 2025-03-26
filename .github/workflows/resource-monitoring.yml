@@ -1,0 +1,102 @@
+name: Resource Usage Monitoring
+
+on:
+  # Run on schedule
+  schedule:
+    - cron: '0 0 * * *'  # Run daily at midnight
+  # Allow manual triggering
+  workflow_dispatch:
+  # Run on PRs to main branches
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  monitor-resources:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install memory_profiler psutil
+
+    - name: Run Memory Profiling
+      env:
+        DJANGO_SETTINGS_MODULE: core.settings
+        DB_NAME: test_db
+        DB_USER: test_user
+        DB_PASSWORD: test_password
+        DB_HOST: localhost
+      run: |
+        python src/tests/performance/memory_profiler.py
+
+    - name: Run Database Performance Tests
+      env:
+        DJANGO_SETTINGS_MODULE: core.settings
+        DB_NAME: test_db
+        DB_USER: test_user
+        DB_PASSWORD: test_password
+        DB_HOST: localhost
+      run: |
+        python src/tests/performance/db_monitor.py
+
+    - name: Process and Upload Results
+      if: always()  # Run even if previous steps fail
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: |
+          memory_profile_results.txt
+          db_performance_results.txt
+
+    - name: Check Performance Thresholds
+      run: |
+        python3 << EOF
+        import os
+        
+        def check_thresholds():
+            # Memory thresholds
+            with open('memory_profile_results.txt', 'r') as f:
+                mem_content = f.read()
+                if 'Memory Usage:' in mem_content:
+                    memory_usage = float(mem_content.split('Memory Usage:')[1].split('MB')[0].strip())
+                    if memory_usage > 2048:  # 2GB threshold
+                        print("⚠️ Warning: Memory usage exceeds 2GB threshold")
+                        return 1
+            
+            # DB performance thresholds
+            with open('db_performance_results.txt', 'r') as f:
+                db_content = f.read()
+                if 'Average Query Time:' in db_content:
+                    avg_time = float(db_content.split('Average Query Time:')[1].split('seconds')[0].strip())
+                    if avg_time > 1.0:  # 1 second threshold
+                        print("⚠️ Warning: Average query time exceeds 1 second threshold")
+                        return 1
+            
+            return 0
+        
+        exit(check_thresholds())
+        EOF

@@ -10,3 +10,6 @@ numpy
 pandas
 gradio
 python-dotenv
+memory-profiler>=0.61.0
+psutil>=5.9.0
+pytest-benchmark>=4.0.0
