@@ -12,8 +12,15 @@ A Django-based application for intelligent file indexing and searching using RAG
 - **File Indexing**:
   - Automatic indexing of common user directories
   - File metadata extraction and storage
-  - Embedding generation for improved similarity search
-  - Support for multiple languages including Arabic
+  - Multiple embedding models for improved matching:
+    - UAE-Large-V1 for general purpose embeddings
+    - Arabert-v2 for Arabic text support
+  - Intelligent language detection and model selection
+  
+- **Multilingual Support**:
+  - Arabic language support using AraberV2 model
+  - Automatic language detection for optimal model selection
+  - High-quality embeddings for both English and Arabic content
   
 - **Search Capabilities**:
   - Natural language queries using smolagents and LLMs
@@ -29,50 +36,31 @@ A Django-based application for intelligent file indexing and searching using RAG
    cd Agentic-RAG-Local-Indexer-ARLI-
    ```
 
-2. **Set up environment:**
-   ```bash
-   # Create and activate virtual environment
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   
-   # Install dependencies
-   pip install -r requirements.txt
-   ```
-
-3. **Configure environment variables:**
-   Create a `.env` file based on `.env.example` with your settings:
+2. **Create a .env file:**
+   Create a `.env` file in the root directory (or use the provided `.env.example`). The default values should work out of the box:
    ```env
    SECRET_KEY=your_secret_key
    DEBUG=True
    ALLOWED_HOSTS=localhost 127.0.0.1 [::1]
-   
-   # Database settings
-   DB_NAME=agentic_rag
-   DB_USER=postgres
-   DB_PASSWORD=your_password
-   DB_HOST=localhost
-   DB_PORT=5432
    ```
 
-4. **Initialize the database:**
+3. **Start the application:**
    ```bash
-   python manage.py migrate
+   # (-d) to run in detached mode 
+   docker-compose up -d --build  
+
    ```
+   This will:
+   - Build the Docker containers
+   - Set up the PostgreSQL database
+   - Install all dependencies
+   - Run migrations automatically
+   - Start the development server
 
-5. **Run the development server:**
-   ```bash
-   python manage.py runserver
-   ```
+4. **Access the application:**
+   Open your web browser and navigate to `http://localhost:8000`
 
-## Usage
-
-### Web Interface
-
-1. Access the web interface at `http://localhost:8000`
-2. Use the search bar to enter natural language queries:
-   - "Find all PDF documents created last week"
-   - "Show me Python files in the src directory"
-   - "Find images larger than 1MB"
+That's it! The application is now running and ready to use.
 
 ### API Endpoints
 
@@ -110,6 +98,22 @@ src/
 │   ├── search_agent.py  # RAG search implementation
 │   └── templates/   # HTML templates
 └── manage.py        # Django management script
+```
+
+## Configuration
+
+The application uses the following models:
+
+- **Default Embedding Model**: WhereIsAI/UAE-Large-V1
+- **Arabic Embedding Model**: aubmindlab/bert-base-arabertv2
+- **RAG Model**: Qwen/Qwen2.5-Coder-3B-Instruct
+
+These can be configured in your environment or settings.py:
+
+```env
+DEFAULT_EMBEDDING=WhereIsAI/UAE-Large-V1
+DEFAULT_EMBEDDING_ARABIC=aubmindlab/bert-base-arabertv2
+DEFAULT_RAG_MODEL=Qwen/Qwen2.5-Coder-3B-Instruct
 ```
 
 ## Contributing
