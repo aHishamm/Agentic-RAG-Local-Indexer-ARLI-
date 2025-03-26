@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
 from pathlib import Path
 from django.conf import settings
 
@@ -13,9 +14,11 @@ if TYPE_CHECKING:
 # Import the SearchAgentService
 from .search_agent import SearchAgentService
 
-# Singleton instance of the SearchAgentService for reuse
+# Singleton instances
 _search_agent_instance = None
 _search_agent_initialized = False
+_arabic_model = None
+_arabic_tokenizer = None
 
 def setup_model_directory() -> str:
     """
@@ -64,9 +67,60 @@ def init_embedding_model(model_name: Optional[str] = None) -> SentenceTransforme
     model = SentenceTransformer(model_name, device=device, cache_folder=model_path)
     return model
 
-# Initialize the model when the module is loaded
+def init_arabic_model():
+    """Initialize the Arabic BERT model using transformers directly"""
+    global _arabic_model, _arabic_tokenizer
+    
+    if _arabic_model is not None and _arabic_tokenizer is not None:
+        return
+        
+    models_dir = setup_model_directory()
+    model_name = settings.DEFAULT_EMBEDDING_ARABIC
+    model_path = settings.DEFAULT_EMBEDDING_MODEL_PATH_ARABIC
+    
+    # Determine device
+    if torch.cuda.is_available():
+        device = 'cuda'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+        
+    print(f"Loading Arabic model {model_name} on {device} device...")
+    
+    # Initialize tokenizer and model
+    _arabic_tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=model_path)
+    _arabic_model = AutoModel.from_pretrained(model_name, cache_dir=model_path).to(device)
+    _arabic_model.eval()  # Set to evaluation mode
+
+def generate_arabic_embedding(text: str) -> np.ndarray:
+    """Generate embeddings using the Arabic BERT model"""
+    global _arabic_model, _arabic_tokenizer
+    
+    # Initialize model if not already done
+    if _arabic_model is None or _arabic_tokenizer is None:
+        init_arabic_model()
+    
+    # Tokenize and prepare input
+    inputs = _arabic_tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    inputs = {k: v.to(_arabic_model.device) for k, v in inputs.items()}
+    
+    # Generate embeddings
+    with torch.no_grad():
+        outputs = _arabic_model(**inputs)
+        # Use mean pooling of last hidden states as embedding
+        attention_mask = inputs['attention_mask']
+        embeddings = mean_pooling(outputs.last_hidden_state, attention_mask)
+        
+    return embeddings[0].cpu().numpy().astype(np.float32)
+
+def mean_pooling(token_embeddings: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    """Calculate mean pooling of token embeddings using attention mask"""
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+
+# Initialize the default model when the module is loaded
 model = init_embedding_model()
-arabic_model = init_embedding_model(settings.DEFAULT_EMBEDDING_ARABIC)
 
 def get_file_metadata(file_path: str) -> Dict[str, Any]:
     """
@@ -94,7 +148,7 @@ def get_file_metadata(file_path: str) -> Dict[str, Any]:
 
 def generate_filename_embedding(filename: str, use_arabic_model: bool = False) -> np.ndarray:
     """
-    Generate embedding for a filename using sentence-transformers.
+    Generate embedding for a filename using either sentence-transformers or Arabic BERT.
     
     Args:
         filename: Name of the file to generate embedding for
@@ -103,9 +157,11 @@ def generate_filename_embedding(filename: str, use_arabic_model: bool = False) -
     Returns:
         numpy array containing the embedding
     """
-    embedding_model = arabic_model if use_arabic_model else model
-    embedding = embedding_model.encode(filename, convert_to_tensor=False)
-    return embedding.astype(np.float32)
+    if use_arabic_model:
+        return generate_arabic_embedding(filename)
+    else:
+        embedding = model.encode(filename, convert_to_tensor=False)
+        return embedding.astype(np.float32)
 
 def search_similar_files(query: str, indexed_files: List['Indexer'], top_k: int = 5) -> List[Dict[str, Any]]:
     """Search for files with similar names using embeddings."""

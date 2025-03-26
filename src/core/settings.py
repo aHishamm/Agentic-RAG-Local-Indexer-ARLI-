@@ -92,12 +92,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
-#Default model names and paths 
+# Model Configuration
 DEFAULT_EMBEDDING = 'WhereIsAI/UAE-Large-V1'
-DEFAULT_EMBEDDING_ARABIC = 'aubmindlab/bert-base-arabertv2' 
+DEFAULT_EMBEDDING_ARABIC = 'aubmindlab/bert-base-arabertv2'
+
+# Model paths
 DEFAULT_EMBEDDING_MODEL_PATH = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_EMBEDDING)
 DEFAULT_EMBEDDING_MODEL_PATH_ARABIC = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_EMBEDDING_ARABIC)
 
-#Default model for the agentic RAG 
-DEFAULT_RAG_MODEL = 'Qwen/Qwen2.5-Coder-3B-Instruct' 
+# Arabic model specific settings
+ARABIC_MODEL_MAX_LENGTH = 1024
+ARABIC_MODEL_POOLING = 'mean'  
+ARABIC_MODEL_NORMALIZE = True   
+
+# Default model for the agentic RAG
+DEFAULT_RAG_MODEL = 'Qwen/Qwen2.5-Coder-3B-Instruct'
 DEFAULT_RAG_MODEL_PATH = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_RAG_MODEL)
