@@ -1,14 +1,19 @@
 import unittest
 import os
 import numpy as np
+import torch
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 from datetime import datetime
 from django.test import TestCase
 from django.conf import settings
+from transformers import AutoModel, AutoTokenizer
 from .utils import (
     setup_model_directory,
     init_embedding_model,
+    init_arabic_model,
+    generate_arabic_embedding,
+    mean_pooling,
     get_file_metadata,
     generate_filename_embedding,
     search_similar_files,
@@ -24,7 +29,7 @@ from .search_agent import SearchAgentService
 class UtilsTestCase(TestCase):
     def setUp(self):
         """Set up test environment"""
-        # temp fiel 
+        # temp file 
         self.test_file_path = "test_file.txt"
         with open(self.test_file_path, "w") as f:
             f.write("Test content")
@@ -168,6 +173,77 @@ class UtilsTestCase(TestCase):
                 os.rmdir(test_dir)
             except:
                 pass
+
+    @patch('transformers.AutoTokenizer.from_pretrained')
+    @patch('transformers.AutoModel.from_pretrained')
+    def test_init_arabic_model(self, mock_model, mock_tokenizer):
+        """Test Arabic model initialization"""
+        # Mock the model and tokenizer
+        mock_model.return_value = MagicMock()
+        mock_tokenizer.return_value = MagicMock()
+        
+        init_arabic_model()
+        
+        # Check if model and tokenizer were initialized with correct parameters
+        mock_model.assert_called_once_with(
+            settings.DEFAULT_EMBEDDING_ARABIC,
+            cache_dir=settings.DEFAULT_EMBEDDING_MODEL_PATH_ARABIC
+        )
+        mock_tokenizer.assert_called_once_with(
+            settings.DEFAULT_EMBEDDING_ARABIC,
+            cache_dir=settings.DEFAULT_EMBEDDING_MODEL_PATH_ARABIC
+        )
+
+    @patch('indexer.utils._arabic_model')
+    @patch('indexer.utils._arabic_tokenizer')
+    def test_generate_arabic_embedding(self, mock_tokenizer, mock_model):
+        """Test Arabic embedding generation"""
+        # Mock tokenizer output
+        mock_tokenizer.return_value = {
+            'input_ids': torch.ones((1, 10)),
+            'attention_mask': torch.ones((1, 10))
+        }
+        
+        # Mock model output
+        mock_output = MagicMock()
+        mock_output.last_hidden_state = torch.ones((1, 10, 768))  # Common BERT hidden size
+        mock_model.return_value = mock_output
+        
+        # Test embedding generation
+        test_text = "اختبار النص العربي"
+        embedding = generate_arabic_embedding(test_text)
+        
+        self.assertIsInstance(embedding, np.ndarray)
+        self.assertEqual(embedding.dtype, np.float32)
+        self.assertEqual(len(embedding.shape), 1)  # Should be a 1D array
+
+    def test_mean_pooling(self):
+        """Test mean pooling function"""
+        # Create sample inputs
+        token_embeddings = torch.ones((2, 3, 4))  # batch_size=2, seq_len=3, hidden_size=4
+        attention_mask = torch.tensor([[1, 1, 0], [1, 0, 0]])  # Mask out some tokens
+        
+        # Calculate mean pooling
+        pooled = mean_pooling(token_embeddings, attention_mask)
+        
+        self.assertEqual(pooled.shape, (2, 4))  # Should be (batch_size, hidden_size)
+        # Check if masked tokens are properly handled
+        self.assertTrue(torch.allclose(pooled[0], torch.ones(4) * 1.0))  # First sequence has 2 tokens
+        self.assertTrue(torch.allclose(pooled[1], torch.ones(4) * 1.0))  # Second sequence has 1 token
+
+    def test_generate_filename_embedding_with_arabic(self):
+        """Test filename embedding generation with Arabic model option"""
+        # Test with Arabic model
+        arabic_filename = "ملف_تجريبي.txt"
+        arabic_embedding = generate_filename_embedding(arabic_filename, use_arabic_model=True)
+        self.assertIsInstance(arabic_embedding, np.ndarray)
+        self.assertEqual(arabic_embedding.dtype, np.float32)
+        
+        # Test with default model
+        english_filename = "test_file.txt"
+        english_embedding = generate_filename_embedding(english_filename, use_arabic_model=False)
+        self.assertIsInstance(english_embedding, np.ndarray)
+        self.assertEqual(english_embedding.dtype, np.float32)
 
 class SearchAgentTestCase(TestCase):
     """Test cases for RAG-powered search functionality"""
