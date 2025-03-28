@@ -10,3 +10,4 @@ numpy
 pandas
 gradio
 python-dotenv
+accelerate>=0.26.0
