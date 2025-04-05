@@ -230,49 +230,56 @@ def get_common_directories() -> List[str]:
         ])
     return [d for d in common_dirs if os.path.exists(d)]
 
-def update_indexed_files(specific_directory: Optional[str] = None, scan_specific_only: bool = False):
-    """Update the database with the latest file system state.
+def update_indexed_files(specific_directory: Optional[str] = None, scan_specific_only: bool = False, batch_size: int = 35):
+    """Update the database with the latest file system state in batches.
     
     Args:
         specific_directory: Optional path to a specific directory to scan
         scan_specific_only: If True, only scan the specific_directory. If False, scan common directories as well.
+        batch_size: Number of files to process in each database batch
     """
     from .models import Indexer
-    
-    all_files = []
-    
-    # Handle specific directory if provided
+    from django.db import transaction
+    current_batch = []
+    def process_batch(batch):
+        """Helper function to process a batch of files"""
+        with transaction.atomic():
+            for file_data in batch:
+                embedding = file_data.pop('embedding')
+                try:
+                    indexed_file, created = Indexer.objects.get_or_create(
+                        file_path=file_data['file_path'],
+                        defaults=file_data
+                    )
+                    if not created:
+                        for key, value in file_data.items():
+                            setattr(indexed_file, key, value)
+                    
+                    indexed_file.set_embedding(embedding)
+                    indexed_file.save()
+                    
+                except Exception as e:
+                    print(f"Error updating database for {file_data['file_path']}: {e}")
+                    continue
     if specific_directory:
         if os.path.exists(specific_directory):
-            files = scan_directory(specific_directory)
-            all_files.extend(files)
+            for file_data in scan_directory(specific_directory):
+                current_batch.append(file_data)
+                if len(current_batch) >= batch_size:
+                    process_batch(current_batch)
+                    current_batch = []
         else:
-            print(f"Warning: Specified directory {specific_directory} does not exist")
-    
-    # If not scanning specific directory only, scan common directories
+            print(f"Warning: Specified directory {specific_directory} does not exist")    
     if not scan_specific_only:
         directories = get_common_directories()
         for directory in directories:
-            files = scan_directory(directory)
-            all_files.extend(files)
-    
-    for file_data in all_files:
-        embedding = file_data.pop('embedding')
-        try:
-            indexed_file, created = Indexer.objects.get_or_create(
-                file_path=file_data['file_path'],
-                defaults=file_data
-            )
-            if not created:
-                for key, value in file_data.items():
-                    setattr(indexed_file, key, value)
-            
-            indexed_file.set_embedding(embedding)
-            indexed_file.save()
-            
-        except Exception as e:
-            print(f"Error updating database for {file_data['file_path']}: {e}")
-            continue
+            for file_data in scan_directory(directory):
+                current_batch.append(file_data)
+                if len(current_batch) >= batch_size:
+                    process_batch(current_batch)
+                    current_batch = []    
+    if current_batch:
+        process_batch(current_batch)
 
 def get_search_agent() -> Optional[SearchAgentService]:
     """
