@@ -1,18 +1,14 @@
 import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-default-secret-key')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -20,7 +16,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'indexer',  # Your indexer app
+    'indexer',
 ]
 
 MIDDLEWARE = [
@@ -54,7 +50,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 ASGI_APPLICATION = 'core.asgi.application'
 
-# Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -66,7 +61,6 @@ DATABASES = {
     }
 }
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -82,29 +76,23 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 
-# Model Configuration
 DEFAULT_EMBEDDING = 'WhereIsAI/UAE-Large-V1'
 DEFAULT_EMBEDDING_ARABIC = 'aubmindlab/bert-base-arabertv2'
 
-# Model paths
 DEFAULT_EMBEDDING_MODEL_PATH = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_EMBEDDING)
 DEFAULT_EMBEDDING_MODEL_PATH_ARABIC = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_EMBEDDING_ARABIC)
 
-# Arabic model specific settings
 ARABIC_MODEL_MAX_LENGTH = 1024
 ARABIC_MODEL_POOLING = 'mean'  
 ARABIC_MODEL_NORMALIZE = True   
 
-# Default model for the agentic RAG
 DEFAULT_RAG_MODEL = 'Qwen/Qwen2.5-Coder-3B-Instruct'
 DEFAULT_RAG_MODEL_PATH = os.path.join(BASE_DIR, 'HF_Models', DEFAULT_RAG_MODEL)
