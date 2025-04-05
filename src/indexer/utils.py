@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoModel, AutoTokenizer
 from pathlib import Path
 from django.conf import settings
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     from .models import Indexer
@@ -190,41 +191,70 @@ def scan_directory(directory: str) -> List[Dict[str, Any]]:
     """Recursively scan a directory and collect file metadata."""
     files_metadata = []
     try:
-        for root, _, files in os.walk(directory):
-            for file in files:
-                try:
-                    file_path = os.path.join(root, file)
-                    metadata = get_file_metadata(file_path)
-                    embedding = generate_filename_embedding(file)
-                    metadata['embedding'] = embedding
-                    files_metadata.append(metadata)
-                except Exception as e:
-                    print(f"Error processing {file}: {e}")
-                    continue
+        # First pass to count total files
+        total_files = sum([len(files) for _, _, files in os.walk(directory)])
+        
+        # Second pass with progress bar
+        with tqdm(total=total_files, desc=f"Scanning {os.path.basename(directory)}") as pbar:
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    try:
+                        file_path = os.path.join(root, file)
+                        metadata = get_file_metadata(file_path)
+                        embedding = generate_filename_embedding(file)
+                        metadata['embedding'] = embedding
+                        files_metadata.append(metadata)
+                    except Exception as e:
+                        print(f"Error processing {file}: {e}")
+                        continue
+                    finally:
+                        pbar.update(1)
     except Exception as e:
         print(f"Error scanning directory {directory}: {e}")
     
     return files_metadata
 
 def get_common_directories() -> List[str]:
-    """Get list of common directories to scan based on OS."""
-    home = str(Path.home())
-    common_dirs = [
-        os.path.join(home, 'Documents'),
-        os.path.join(home, 'Downloads'),
-        os.path.join(home, 'Desktop'),
-    ]
+    """directories based on exposed home OS"""
+    base_path = '/host/Users'
+    # Get all user directories
+    user_dirs = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    common_dirs = []
+    # For each user, add their common directories
+    for user in user_dirs:
+        user_path = os.path.join(base_path, user)
+        common_dirs.extend([
+            os.path.join(user_path, 'Documents'),
+            os.path.join(user_path, 'Downloads'), 
+            os.path.join(user_path, 'Desktop'),
+        ])
     return [d for d in common_dirs if os.path.exists(d)]
 
-def update_indexed_files():
-    """Update the database with the latest file system state."""
+def update_indexed_files(specific_directory: Optional[str] = None, scan_specific_only: bool = False):
+    """Update the database with the latest file system state.
+    
+    Args:
+        specific_directory: Optional path to a specific directory to scan
+        scan_specific_only: If True, only scan the specific_directory. If False, scan common directories as well.
+    """
     from .models import Indexer
     
-    directories = get_common_directories()
     all_files = []
-    for directory in directories:
-        files = scan_directory(directory)
-        all_files.extend(files)
+    
+    # Handle specific directory if provided
+    if specific_directory:
+        if os.path.exists(specific_directory):
+            files = scan_directory(specific_directory)
+            all_files.extend(files)
+        else:
+            print(f"Warning: Specified directory {specific_directory} does not exist")
+    
+    # If not scanning specific directory only, scan common directories
+    if not scan_specific_only:
+        directories = get_common_directories()
+        for directory in directories:
+            files = scan_directory(directory)
+            all_files.extend(files)
     
     for file_data in all_files:
         embedding = file_data.pop('embedding')
