@@ -107,6 +107,17 @@ DB_PORT=5432
    DEFAULT_EMBEDDING = 'your-preferred-model'
    DEFAULT_EMBEDDING_ARABIC = 'your-preferred-arabic-model'
    ```
+### Examples 
+1. **Indexing a custom directory** 
+```bash
+python manage.py shell 
+```
+```python
+from indexer import utils 
+# example path to a directory in the host OS 
+path_to_directory = '/host/Users/ahishamm/Downloads' #keep /host/ in path 
+utils.update_indexed_files(path_to_directory,scan_specific_only=True)
+```
 
 ## Troubleshooting
 
