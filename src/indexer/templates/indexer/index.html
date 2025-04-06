@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="jumbotron">
+        <h1 class="display-4">Welcome to ARLI</h1>
+        <p class="lead">Agentic RAG Local Indexer - An intelligent file indexing and searching system</p>
+        <hr class="my-4">
+        <p>Use the navigation above to browse indexed files or search through them using natural language.</p>
+        <div class="mt-4">
+            <a class="btn btn-primary btn-lg me-2" href="{% url 'list_files' %}" role="button">Browse Files</a>
+            <a class="btn btn-secondary btn-lg" href="{% url 'search_files' %}" role="button">Search Files</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Indexed Files</h2>
+    <p>Total files: {{ total_files }}</p>
+
+    <!-- Filter Controls -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <select class="form-select" id="dateFilter" onchange="applyFilters()">
+                <option value="" {% if not current_filters.date %}selected{% endif %}>All Dates</option>
+                <option value="today" {% if current_filters.date == 'today' %}selected{% endif %}>Today</option>
+                <option value="yesterday" {% if current_filters.date == 'yesterday' %}selected{% endif %}>Yesterday</option>
+                <option value="last_week" {% if current_filters.date == 'last_week' %}selected{% endif %}>Last Week</option>
+                <option value="last_month" {% if current_filters.date == 'last_month' %}selected{% endif %}>Last Month</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="sizeFilter" onchange="applyFilters()">
+                <option value="" {% if not current_filters.size %}selected{% endif %}>All Sizes</option>
+                <option value="small" {% if current_filters.size == 'small' %}selected{% endif %}>Small (< 1MB)</option>
+                <option value="medium" {% if current_filters.size == 'medium' %}selected{% endif %}>Medium (1MB - 10MB)</option>
+                <option value="large" {% if current_filters.size == 'large' %}selected{% endif %}>Large (> 10MB)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="typeFilter" onchange="applyFilters()">
+                <option value="" {% if not current_filters.type %}selected{% endif %}>All Types</option>
+                {% for type in file_types %}
+                    {% if type %}
+                        <option value="{{ type }}" {% if current_filters.type == type %}selected{% endif %}>{{ type|upper }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button class="btn btn-secondary" onclick="clearFilters()">Clear Filters</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>
+                        <a href="{% url 'list_files' %}?sort=file_name&order={% if sort_by == 'file_name' and order == 'asc' %}desc{% else %}asc{% endif %}">
+                            File Name {% if sort_by == 'file_name' %}{% if order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{% url 'list_files' %}?sort=file_type&order={% if sort_by == 'file_type' and order == 'asc' %}desc{% else %}asc{% endif %}">
+                            Type {% if sort_by == 'file_type' %}{% if order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{% url 'list_files' %}?sort=creation_date&order={% if sort_by == 'creation_date' and order == 'asc' %}desc{% else %}asc{% endif %}">
+                            Created {% if sort_by == 'creation_date' %}{% if order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="{% url 'list_files' %}?sort=size&order={% if sort_by == 'size' and order == 'asc' %}desc{% else %}asc{% endif %}">
+                            Size {% if sort_by == 'size' %}{% if order == 'asc' %}↑{% else %}↓{% endif %}{% endif %}
+                        </a>
+                    </th>
+                    <th>Path</th>
+                    <th>Embedding</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in page_obj %}
+                <tr>
+                    <td>{{ file.file_name }}</td>
+                    <td>{{ file.file_type }}</td>
+                    <td>{{ file.creation_date|date:"Y-m-d H:i" }}</td>
+                    <td>{{ file.formatted_size }}</td>
+                    <td class="text-truncate" style="max-width: 300px;" title="{{ file.file_path }}">
+                        {{ file.file_path }}
+                    </td>
+                    <td>
+                        {% if file.embedding_preview %}
+                            <span title="{{ file.embedding_preview }}" class="badge bg-info">
+                                {{ file.embedding_preview|truncatechars:20 }}
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary">No embedding</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">No files indexed yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="{% url 'list_files' %}?page=1&sort={{ sort_by }}&order={{ order }}">&laquo; First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="{% url 'list_files' %}?page={{ page_obj.previous_page_number }}&sort={{ sort_by }}&order={{ order }}">Previous</a>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="{% url 'list_files' %}?page={{ num }}&sort={{ sort_by }}&order={{ order }}">{{ num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="{% url 'list_files' %}?page={{ page_obj.next_page_number }}&sort={{ sort_by }}&order={{ order }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="{% url 'list_files' %}?page={{ page_obj.paginator.num_pages }}&sort={{ sort_by }}&order={{ order }}">Last &raquo;</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+function applyFilters() {
+    const dateFilter = document.getElementById('dateFilter').value;
+    const sizeFilter = document.getElementById('sizeFilter').value;
+    const typeFilter = document.getElementById('typeFilter').value;
+    
+    let currentUrl = new URL(window.location.href);
+    let params = currentUrl.searchParams;
+    
+    // Update filter parameters
+    if (dateFilter) params.set('date_filter', dateFilter);
+    else params.delete('date_filter');
+    
+    if (sizeFilter) params.set('size_filter', sizeFilter);
+    else params.delete('size_filter');
+    
+    if (typeFilter) params.set('type_filter', typeFilter);
+    else params.delete('type_filter');
+    
+    // Preserve sort parameters if they exist
+    const sort = params.get('sort');
+    const order = params.get('order');
+    if (sort) params.set('sort', sort);
+    if (order) params.set('order', order);
+    
+    // Reset to page 1 when filters change
+    params.set('page', '1');
+    
+    window.location.href = currentUrl.toString();
+}
+
+function clearFilters() {
+    let currentUrl = new URL(window.location.href);
+    let params = currentUrl.searchParams;
+    
+    // Remove all filter parameters
+    params.delete('date_filter');
+    params.delete('size_filter');
+    params.delete('type_filter');
+    
+    // Preserve sort parameters
+    const sort = params.get('sort');
+    const order = params.get('order');
+    if (sort) params.set('sort', sort);
+    if (order) params.set('order', order);
+    
+    // Reset to page 1
+    params.set('page', '1');
+    
+    window.location.href = currentUrl.toString();
+}
+</script>
+{% endblock %}
