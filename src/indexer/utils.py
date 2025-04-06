@@ -3,11 +3,17 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 import numpy as np
 import torch
+### added for new parallel code segment 
+import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+from tqdm import tqdm
+from tqdm.auto import tqdm
+### end of added parallel code segment 
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModel, AutoTokenizer
 from pathlib import Path
 from django.conf import settings
-from tqdm import tqdm
 
 if TYPE_CHECKING:
     from .models import Indexer
@@ -186,34 +192,6 @@ def search_similar_files(query: str, indexed_files: List['Indexer'], top_k: int 
         }
         for file, sim in similarities[:top_k]
     ]
-
-def scan_directory(directory: str) -> List[Dict[str, Any]]:
-    """Recursively scan a directory and collect file metadata."""
-    files_metadata = []
-    try:
-        # First pass to count total files
-        total_files = sum([len(files) for _, _, files in os.walk(directory)])
-        
-        # Second pass with progress bar
-        with tqdm(total=total_files, desc=f"Scanning {os.path.basename(directory)}") as pbar:
-            for root, _, files in os.walk(directory):
-                for file in files:
-                    try:
-                        file_path = os.path.join(root, file)
-                        metadata = get_file_metadata(file_path)
-                        embedding = generate_filename_embedding(file)
-                        metadata['embedding'] = embedding
-                        files_metadata.append(metadata)
-                    except Exception as e:
-                        print(f"Error processing {file}: {e}")
-                        continue
-                    finally:
-                        pbar.update(1)
-    except Exception as e:
-        print(f"Error scanning directory {directory}: {e}")
-    
-    return files_metadata
-
 def get_common_directories() -> List[str]:
     """directories based on exposed home OS"""
     base_path = '/host/Users'
@@ -229,58 +207,129 @@ def get_common_directories() -> List[str]:
             os.path.join(user_path, 'Desktop'),
         ])
     return [d for d in common_dirs if os.path.exists(d)]
-
-def update_indexed_files(specific_directory: Optional[str] = None, scan_specific_only: bool = False, batch_size: int = 35):
-    """Update the database with the latest file system state in batches.
-    
-    Args:
-        specific_directory: Optional path to a specific directory to scan
-        scan_specific_only: If True, only scan the specific_directory. If False, scan common directories as well.
-        batch_size: Number of files to process in each database batch
-    """
+def update_indexed_files(
+    specific_directory: Optional[str] = None, 
+    scan_specific_only: bool = False, 
+    batch_size: int = 100
+):
+    """Update the database with the latest file system state using parallel processing."""
     from .models import Indexer
     from django.db import transaction
-    current_batch = []
+    from django.db.models import F
+    
     def process_batch(batch):
-        """Helper function to process a batch of files"""
+        """Process a batch of files using bulk operations"""
         with transaction.atomic():
+            # Separate new and existing files
+            existing_paths = set(Indexer.objects.filter(
+                file_path__in=[f['file_path'] for f in batch]
+            ).values_list('file_path', flat=True))
+            
+            new_files = []
+            update_files = []
+            
             for file_data in batch:
+                file_path = file_data['file_path']
                 embedding = file_data.pop('embedding')
-                try:
-                    indexed_file, created = Indexer.objects.get_or_create(
-                        file_path=file_data['file_path'],
-                        defaults=file_data
+                
+                if file_path not in existing_paths:
+                    new_file = Indexer(**file_data)
+                    new_file.set_embedding(embedding)
+                    new_files.append(new_file)
+                else:
+                    update_files.append({
+                        'file_path': file_path,
+                        'data': file_data,
+                        'embedding': embedding
+                    })
+            
+            # Bulk create new files
+            if new_files:
+                Indexer.objects.bulk_create(new_files, batch_size=100)
+            
+            # Bulk update existing files
+            if update_files:
+                for update_batch in update_files:
+                    Indexer.objects.filter(file_path=update_batch['file_path']).update(
+                        **update_batch['data']
                     )
-                    if not created:
-                        for key, value in file_data.items():
-                            setattr(indexed_file, key, value)
-                    
-                    indexed_file.set_embedding(embedding)
-                    indexed_file.save()
-                    
+                    # Handle embedding update separately since it needs the model method
+                    indexed_file = Indexer.objects.get(file_path=update_batch['file_path'])
+                    indexed_file.set_embedding(update_batch['embedding'])
+                    indexed_file.save(update_fields=['embedding'])
+
+    def scan_directory(directory):
+        """Scan directory using parallel processing"""
+        cpu_count = mp.cpu_count()        
+        progress_bar = None
+        def init_progress_bar(total):
+            nonlocal progress_bar
+            progress_bar = tqdm(
+                total=total,
+                desc=f"Scanning {os.path.basename(directory)}",
+                unit="files",
+                position=0,
+                leave=True
+            )
+            return progress_bar
+        
+        def update_progress(n):
+            if progress_bar:
+                progress_bar.update(n)        
+        files = []
+        for root, _, filenames in os.walk(directory):
+            files.extend([os.path.join(root, f) for f in filenames])
+        if not files:
+            return []
+        progress_bar = init_progress_bar(len(files))
+        chunk_size = max(len(files) // (cpu_count * 2), 1)
+        file_chunks = [files[i:i + chunk_size] for i in range(0, len(files), chunk_size)]
+        results = []
+        with ThreadPoolExecutor(max_workers=cpu_count) as executor:
+            scan_with_progress = partial(scan_files_chunk, update_progress=update_progress)
+            for chunk_result in executor.map(scan_with_progress, file_chunks):
+                if chunk_result:
+                    results.extend(chunk_result)
+        progress_bar.close()
+        return results
+    def scan_files_chunk(files, update_progress=None):
+        """Process a chunk of files with progress updates"""
+        results = []
+        for f in files:
+            if os.path.isfile(f):
+                try:
+                    metadata = get_file_metadata(f)
+                    embedding = generate_filename_embedding(os.path.basename(f))
+                    metadata['embedding'] = embedding
+                    results.append(metadata)     
+                    if update_progress:
+                        update_progress(1)
                 except Exception as e:
-                    print(f"Error updating database for {file_data['file_path']}: {e}")
-                    continue
-    if specific_directory:
-        if os.path.exists(specific_directory):
-            for file_data in scan_directory(specific_directory):
-                current_batch.append(file_data)
-                if len(current_batch) >= batch_size:
-                    process_batch(current_batch)
-                    current_batch = []
-        else:
-            print(f"Warning: Specified directory {specific_directory} does not exist")    
+                    print(f"Error processing {f}: {e}")
+                    if update_progress:
+                        update_progress(1)
+        
+        return results
+    current_batch = []
+    if specific_directory and os.path.exists(specific_directory):
+        files_data = scan_directory(specific_directory)
+        for file_data in files_data:
+            current_batch.append(file_data)
+            if len(current_batch) >= batch_size:
+                process_batch(current_batch)
+                current_batch = []         
     if not scan_specific_only:
         directories = get_common_directories()
         for directory in directories:
-            for file_data in scan_directory(directory):
-                current_batch.append(file_data)
-                if len(current_batch) >= batch_size:
-                    process_batch(current_batch)
-                    current_batch = []    
+            if os.path.exists(directory):
+                files_data = scan_directory(directory)
+                for file_data in files_data:
+                    current_batch.append(file_data)
+                    if len(current_batch) >= batch_size:
+                        process_batch(current_batch)
+                        current_batch = []
     if current_batch:
         process_batch(current_batch)
-
 def get_search_agent() -> Optional[SearchAgentService]:
     """
     Get or create a singleton instance of the SearchAgentService.
