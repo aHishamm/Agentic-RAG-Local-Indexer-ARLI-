@@ -131,7 +131,7 @@ model = init_embedding_model()
 
 def get_file_metadata(file_path: str) -> Dict[str, Any]:
     """
-    Get metadata for a file including size, creation date, and type.
+    Get metadata for a file including size, creation date, type, and whether it's a textual file.
     
     Args:
         file_path: Path to the file
@@ -142,13 +142,15 @@ def get_file_metadata(file_path: str) -> Dict[str, Any]:
     try:
         stats = os.stat(file_path)
         _, extension = os.path.splitext(file_path)
+        file_type = extension[1:] if extension else 'unknown'
         
         return {
             'file_name': os.path.basename(file_path),
             'file_path': os.path.abspath(file_path),
-            'file_type': extension[1:] if extension else 'unknown',
+            'file_type': file_type,
             'creation_date': datetime.fromtimestamp(stats.st_ctime),
-            'size': stats.st_size
+            'size': stats.st_size,
+            'is_textual': is_textual_file(file_type)
         }
     except OSError as e:
         raise ValueError(f"Error getting file metadata: {e}")
@@ -394,3 +396,31 @@ def _format_size(size_bytes: int) -> str:
         if size_bytes < 1024.0 or unit == 'TB':
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024.0
+
+def is_textual_file(file_type: str) -> bool:
+    """
+    Determine if a file is textual based on its extension.
+    
+    Args:
+        file_type: The file extension without the dot
+        
+    Returns:
+        bool: True if the file is considered textual, False otherwise
+    """
+    textual_extensions = {
+        # Document formats
+        'txt', 'md', 'rtf', 'doc', 'docx', 'odt', 'pdf',
+        # Code files
+        'py', 'js', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'php', 'rb', 'go',
+        'rs', 'swift', 'kt', 'scala', 'r', 'sql', 'sh', 'bash', 'ps1',
+        # Web files
+        'html', 'htm', 'css', 'xml', 'json', 'yaml', 'yml',
+        # Config files
+        'ini', 'conf', 'cfg', 'properties', 'env',
+        # Other text formats
+        'csv', 'tsv', 'log', 'tex'
+    }
+    return file_type.lower() in textual_extensions
+
+# Initialize the default model when the module is loaded
+model = init_embedding_model()

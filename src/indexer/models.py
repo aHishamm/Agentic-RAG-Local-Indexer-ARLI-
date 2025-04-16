@@ -8,6 +8,7 @@ class Indexer(models.Model):
     creation_date = models.DateTimeField()
     size = models.BigIntegerField()
     embedding = models.BinaryField(null=True)  # Store filename embeddings as binary
+    is_textual = models.BooleanField(default=False) # True if the file is textual
 
     def set_embedding(self, embedding_array: np.ndarray):
         self.embedding = embedding_array.tobytes()
